@@ -1,0 +1,341 @@
+---
+title: "Project 2"
+author: "Lisa Siefker"
+date: "2025-03-22"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr) 
+library(tidyverse)
+library(ggplot2) 
+library(vcd)
+```
+
+```{r}
+brant <- read.table(file="project4data.txt", col.names = c("observ", "altitude", "lateral", "flight"))
+head(brant)
+```
+
+```{r}
+# get dataframe dimensions and summary data 
+print(dim(brant))
+summary(brant)
+```
+
+```{r}
+# check for missing values
+sum(is.na(brant))
+```
+
+```{r}
+# altitude is randomly assigned for each flight to one of nine discrete levels
+# get counts of altitudes 
+altitude_counts <- table(brant$altitude)
+print(altitude_counts)
+```
+
+```{r}
+# add column that classifies altitude into three categories: <3, 3 - 6, > 6
+brant_1 <- brant
+brant_1$altitude_cat <- cut(
+  brant_1$altitude,
+  breaks = c(-Inf, 3, 6, Inf),  
+  labels = c("<3", "3-6", ">6")  
+)
+
+head(brant_1, 2)
+```
+
+```{r}
+# get counts in each altitude category
+table(brant_1$altitude_cat)
+```
+
+Note that altitude categories are unbalanced.
+
+```{r}
+# add column that classifies lateral distance into four classes: <10, 10-19, 20-29, >30 
+brant_1$lateral_cat <- cut(
+  brant_1$lateral,
+  breaks = c(-Inf, 10, 20, 30, Inf),
+  labels = c("<10", "10-19", "20-29", ">30")  
+)
+
+head(brant_1, 2)
+```
+
+```{r}
+# get counts in each lateral category
+table(brant_1$lateral_cat)
+```
+
+Note that lateral categories are unbalanced.
+
+```{r}
+# get counts of flight response (1=yes, 0=no)
+flight_counts <- table(brant_1$flight)
+print(flight_counts)
+```
+
+```{r}
+# scatterplot altitude v. lateral 
+ggplot(brant_1, aes(x = lateral, y = altitude, color = factor(flight))) +
+  geom_jitter(width = 0.2, height = 0.2) +  # Add jitter to avoid overplotting
+  labs(
+    title = "Scatterplot of Altitude vs Lateral by Flight Response",
+    x = "Lateral",
+    y = "Altitude",
+    color = "Flight Response"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("0" = "lightgreen", "1" = "darkblue")) 
+```
+
+The scatter plot shows that smaller lateral distance and higher altitudes tend to result in a flight response.
+
+Q1: What is the effect of helicopter altitude on the flight response of Pacific brant?
+
+```{r}
+# Bar plot of flight response by altitude category
+barplot(table(brant_1$altitude_cat, brant_1$flight), 
+        main = "Flight Response by Altitude Category", 
+        xlab = "Flight Response", 
+        ylab = "Count", 
+        col = c("lightblue", "lightgreen", "forestgreen"), 
+        legend = rownames(table(brant_1$altitude_cat, brant_1$flight))) 
+```
+
+This plot shows that overall there were more flight responses than non-responses in the dataset. Both flight responses and non-responses occurred at every altitude category. At the \>6 altitude category, the plot indicates that significantly more flights had a response than did not have a response.
+
+```{r}
+# Grouped bar plot
+ggplot(brant_1, aes(x = altitude_cat, fill = factor(flight))) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Flight Response by Altitude Category",
+    x = "Altitude Category",
+    y = "Count",
+    fill = "Flight Response"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("0" = "lightgreen", "1" = "darkblue"))
+
+```
+
+This is another way to visualize flight response and non-response by altitude category. It's clear that more flocks had a response than did not have a response at every altitude category.
+
+Does flight response have a different mean altitude or lateral distance? This question is to determine the difference in the calculated means of our response vs. non-response group without considering categories of altitude or lateral distance.
+
+The mean for altitude is lower in the non-response group, while the mean for lateral distance is significantly smaller for the response group. To verify these differences are significant, t-tests were run and analyzed and then a Wilcoxon sign test.
+
+```{r}
+# find the means
+mean((brant_1$altitude[brant_1$flight == 1]))
+mean((brant_1$altitude[brant_1$flight == 0]))
+
+mean((brant_1$lateral[brant_1$flight == 1]))
+mean((brant_1$lateral[brant_1$flight == 0]))
+
+# run t-tests on lateral and altitude
+t.test(brant_1$altitude ~ brant_1$flight)
+t.test(brant_1$lateral ~ brant_1$flight)
+
+#test assumptions of t-tests
+lateral_flight_0 <- brant_1$lateral[brant_1$flight == 0]
+lateral_flight_1 <- brant_1$lateral[brant_1$flight == 1]
+altitude_flight_0<-brant_1$altitude[brant_1$flight==0]
+altitude_flight_1<-brant_1$altitude[brant_1$flight==1]
+
+qqnorm(lateral_flight_0,main="Distance: No Flight Response")
+qqline(lateral_flight_0)
+qqnorm(lateral_flight_1,main="Distance: Flight Response")
+qqline(lateral_flight_1)
+qqnorm(altitude_flight_0,main="Altitude: No Flight Response")
+qqline(altitude_flight_0)
+qqnorm(altitude_flight_1,main="Altitude: Flight Response")
+qqline(altitude_flight_1)
+```
+
+While the t-tests show there is overwhelming evidence that the mean lateral distance is much lower for the response group than for the non-response group (p value of 2.2e-16) and very strong evidence that the mean altitude distance is lower for the non-response group (p value of .007589), the data may not meet all the assumptions required to use t-tests. The Q-Q plots show that our data here is most likley not Normally distributed and we may need to consider nonparametic tests.
+
+```{r}
+# run Wilcoxon sign test
+wilcox.test(lateral~flight, data = brant_1)
+wilcox.test(altitude~flight, data = brant_1)
+```
+
+Based on the Wilcoxon sign test, there is overwhelming evidence that mean lateral distance between the flight and flight response groups are different. The altitude also show some evidence. With a p-value of .04 we would reject the null hypothesis (that mean altitude between the two groups is the same) with a reasonable degree of confidence.
+
+```{r}
+#plotting the lateral effect 
+barplot(table(brant_1$lateral_cat, brant_1$flight), 
+        main = "Flight Response by Lateral Category", 
+        xlab = "Flight Response", 
+        ylab = "Count", 
+        col = c("lightblue", "lightgreen", "forestgreen", "darkorchid1"), 
+        legend = rownames(table(brant_1$lateral_cat, brant_1$flight))) 
+```
+
+This plot shows that there were significantly more flight responses at the closest lateral distance. While non-responses were spread across the data in each bracket of distance, by far the greatest number of responses occurred in the closest bracket.
+
+```{r}
+# Grouped bar plot
+ggplot(brant_1, aes(x = lateral_cat, fill = factor(flight))) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Flight Response by Lateral Category",
+    x = "Lateral Category",
+    y = "Count",
+    fill = "Flight Response"
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("0" = "lightgreen", "1" = "darkblue"))
+```
+
+This plot shows an overwhelmingly higher number of close (\<1000 m) helicopter flights causing a flight response. In all other distances, there were more non-responses than responses, with a significant drop off proportionally once the helicopters were more than 2000 m away.
+
+```{r}
+# use chi-squared test to check for significant association between altitude_cat and flight 
+# tests whether the distribution of flight responses differs across all levels of altitude category
+chisq.test(table(brant_1$altitude_cat, brant_1$flight))
+```
+
+Interpretation of the Chi-Square Test:
+
+Null Hypothesis: There is no association between altitude category and flight response Alternative Hypothesis: There is an association between altitude category and flight response
+
+The P-value is less than the significance level of 0.05, so we reject the null hypothesis and conclude that there is a statistically significant association between altitude category and flight response.
+
+```{r}
+#Use logistic regression to model the probability of a flight response as a function of altitude category
+
+# Convert altitude_cat to factor 
+brant_1$altitude_cat <- as.factor(brant_1$altitude_cat)
+
+# Fit a logistic regression model predicting flight response by altitude category
+logistic_model <- glm(flight ~ altitude_cat, data = brant_1, family = binomial)
+
+# Summarize the model
+print(summary(logistic_model))
+
+```
+
+Interpreting Model Output:
+
+The logistic regression model predicts the probability of a flight response based on the altitude category.
+
+Null hypothesis: Altitude category has no effect on flight response Alternative hypothesis: At least one altitude category has an effect on flight response
+
+The p-value for altitude category \>6 is 0.0009. The pvalue is less than the significance level of 0.05, so we reject the null hypothesis and conclude that helicopters flying at a level of \>6 have a significant impact on flight response at the 5% level of significance.
+
+The p-values of the \<3 and 3-6 altitude categories are greater than 0.05, indicating that helicopters flying at those altitudes do not have a significant effect on flight response.
+
+```{r}
+# Convert variables to factor
+brant_1$altitude_cat <- as.factor(brant_1$altitude_cat)
+brant_1$lateral_cat <- as.factor(brant_1$lateral_cat)
+
+# Fit the logistic regression model
+logistic_model_1 <- glm(flight ~ altitude_cat + lateral_cat, data = brant_1, family = binomial)
+
+# Summarize the model
+summary(logistic_model_1)
+
+```
+
+Altitude category 3-6 is the only variable category that does not have a significant effect on flight, so I will remove it from the model.
+
+```{r}
+# Filter the data to exclude altitude_cat3-6
+brant_filtered <- brant_1[brant_1$altitude_cat != "3-6", ]
+
+# Fit the logistic regression model on the filtered data
+logistic_model_2 <- glm(flight ~ altitude_cat + lateral_cat, data = brant_filtered, family = binomial)
+
+# Summarize the model
+summary(logistic_model_2)
+```
+
+Lateral category \>30 does not have a significant effect on flight, so I will remove it from the model.
+
+```{r}
+# Filter the data to exclude lateral_cat>30
+brant_filtered_2 <- brant_filtered[brant_filtered$lateral_cat != ">30", ]
+
+# Fit the logistic regression model on the filtered data
+logistic_model_3 <- glm(flight ~ altitude_cat + lateral_cat, data = brant_filtered_2, family = binomial)
+
+# Summarize the model
+summary(logistic_model_3)
+```
+
+All remaining variable categories appear to have a significant impact on flight response.
+
+```{r}
+# Filter the data to exclude lateral_cat>30
+brant_filtered_2 <- brant_filtered[brant_filtered$lateral_cat != ">30", ]
+
+# Fit the logistic regression model on the filtered data and add an interaction between lat and altitude
+logistic_model_4 <- glm(flight ~altitude_cat+ lateral_cat+altitude_cat*lateral_cat, data = brant_filtered_2, family = binomial(link=logit))
+
+# Summarize the model
+summary(logistic_model_4)
+```
+
+```{r}
+# Interaction plot
+interaction.plot(brant_1$altitude_cat, brant_1$lateral_cat, brant_1$flight, xlab = 
+                   "Altitude bracket", ylab="Mean of Flight Response", trace.label="Lateral distance bracket")
+
+# alternate format
+
+intersum <-brant_1 %>% group_by(altitude_cat, lateral_cat) %>% summarize (prop_flight_1 = mean(flight, na.rm=TRUE), n = n())
+ggplot(intersum, aes(x = altitude_cat, y = prop_flight_1, color = lateral_cat, group = lateral_cat)) +
+  geom_point(size = 3) +
+  geom_line() +
+  labs(title = "Proportion of Flight by Altitude and Lateral Category",
+       x = "Altitude Category",
+       y = "Proportion (Flight = 1)",
+       color = "Lateral Category") +
+  ylim(0, 1)
+
+```
+
+If we look at the plotted proportions, it appears that all altitudes in the shortest lateral distance have a high proportion of flight responses and the line is relatively flat (that is, at that close distance, there was not a significant interaction between altitude and lateral distance). In the mid-range altitude bracket (300-600m), there appears to be an interaction with the two highest brackets for lateral distance. That is, when the helicopters were more than 3000 m laterally away but at a height of 300-600 meters, there was a higher proportion of flight responses than when the helicopters were within 2000-2900 m.
+
+```{r Confidence Interval, paged.print=TRUE}
+
+confint(logistic_model_4)
+
+
+```
+```{r}
+exp(-3.765)
+```
+```{r}
+glm(formula = flight ~ altitude_cat + lateral_cat + altitude_cat * 
+    lateral_cat, family = binomial(link = logit), data = brant_1)
+```
+```{r}
+# Odds Ratios
+exp(-3.7651)  # OR for lateral 10-19 at altitude≤6
+exp(-5.1240)  # OR for lateral 20-29 at altitude≤6
+exp(-3.7651 + 3.1650)  # OR for lateral 10-19 at altitude>6
+exp(-5.1240 + 3.2022)  # OR for lateral 20-29 at altitude>6
+
+# Probabilities
+plogis(1.9459)                  # Reference probability
+plogis(1.9459 - 3.7651)         # Lateral 10-19 at altitude≤6
+plogis(1.9459 - 5.1240)         # Lateral 20-29 at altitude≤6
+plogis(1.9459 - 3.7651 + 3.1650) # Lateral 10-19 at altitude>6
+```
+
+
